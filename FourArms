@@ -1,0 +1,205 @@
+#pragma config(I2C_Usage, I2C1, i2cSensors)
+#pragma config(Sensor, in1,    ArmAngle,       sensorPotentiometer)
+#pragma config(Sensor, in2,    LeftLine,       sensorLineFollower)
+#pragma config(Sensor, in3,    RightLine,      sensorLineFollower)
+#pragma config(Sensor, I2C_1,  ,               sensorQuadEncoderOnI2CPort,    , AutoAssign)
+#pragma config(Sensor, I2C_2,  ,               sensorQuadEncoderOnI2CPort,    , AutoAssign)
+#pragma config(Motor,  port1,           feed1,         tmotorVex393_HBridge, openLoop)
+#pragma config(Motor,  port2,           launch1,       tmotorVex393TurboSpeed_MC29, openLoop, reversed)
+#pragma config(Motor,  port3,           launch2,       tmotorVex393TurboSpeed_MC29, openLoop)
+#pragma config(Motor,  port4,           FrontLeft,     tmotorVex393_MC29, openLoop, driveRight, encoderPort, I2C_2)
+#pragma config(Motor,  port5,           FrontRight,    tmotorVex393_MC29, openLoop, reversed, driveRight, encoderPort, I2C_1)
+#pragma config(Motor,  port6,           BackLeft,      tmotorVex393_MC29, openLoop, reversed, driveLeft)
+#pragma config(Motor,  port7,           BackRight,     tmotorVex393_MC29, openLoop, driveLeft)
+#pragma config(Motor,  port8,           launch3,       tmotorVex393TurboSpeed_MC29, openLoop, reversed)
+#pragma config(Motor,  port9,           launch4,       tmotorVex393TurboSpeed_MC29, openLoop)
+
+int LaunchSpeed;
+int Angle;
+int AngleThrower;
+int AimingStep = 0;
+int Aimstep = 0;
+int RightSpeed;
+int LeftSpeed;
+float PowerPercentRight;
+float PowerPercentLeft;
+int MotorLeftPower = 127;
+int MotorRightPower = 127;
+int LastRightMotorValue;
+int LastLeftMotorValue;
+
+task Aiming()
+{
+	if(SensorValue[RightLine] <= 50)
+		{
+			clearTimer(T1);
+			AimingStep = 1;
+			Aimstep = 1;
+			if(time1[T1] < 500 && AimingStep == 1)
+				{
+					motor[BackLeft] = 15;
+					motor[BackRight] = -15;
+					motor[FrontLeft] = 15;
+					motor[FrontRight] = -15;
+				}
+			if(time1[T1] == 500 && AimingStep == 1)
+				{
+					AimingStep = 2;
+				}
+			if(AimingStep == 1 && SensorValue[RightLine] <= 50)
+				{
+					motor[BackLeft] = 15;
+					motor[BackRight] = 15;
+					motor[FrontLeft] = 15;
+					motor[FrontRight] = 15;
+				}
+		}
+	if(SensorValue[LeftLine] <= 50)
+		{
+			clearTimer(T1);
+			AimingStep = 1;
+			Aimstep = 2;
+			if(time1[T1] < 500 && AimingStep == 1)
+				{
+					motor[BackLeft] = -15;
+					motor[BackRight] = 15;
+					motor[FrontLeft] = -15;
+					motor[FrontRight] = 15;
+				}
+			if(time1[T1] == 500 && AimingStep == 1)
+				{
+					AimingStep = 2;
+				}
+			if(AimingStep == 1 && SensorValue[LeftLine] <= 50)
+				{
+					motor[BackLeft] = 15;
+					motor[BackRight] = 15;
+					motor[FrontLeft] = 15;
+					motor[FrontRight] = 15;
+				}
+		}
+		else if (Aimstep == 1)
+			clearTimer(T2);
+			if(time1[T2] < 500)
+				{
+					motor[BackLeft] = -15;
+					motor[BackRight] = 15;
+					motor[FrontLeft] = -15;
+					motor[FrontRight] = 15;
+				}
+			if(time1[T2] == 0)
+				{
+					Aimstep = 0;
+				}
+		else if (Aimstep == 2)
+			clearTimer(T2);
+			if(time1[T2] < 500)
+				{
+					motor[BackLeft] = 15;
+					motor[BackRight] = -15;
+					motor[FrontLeft] = 15;
+					motor[FrontRight] = -15;
+				}
+			if(time1[T2] == 0)
+				{
+					Aimstep = 0;
+				}
+}
+
+task Drive()
+{
+	while(1==1)
+	{
+		PowerPercentRight = (vexRT[Ch2]/127);
+		PowerPercentLeft = (vexRT[Ch3]/127);
+		motor[FrontRight] = (MotorRightPower * PowerPercentRight);
+		motor[BackRight] = (MotorRightPower * PowerPercentRight);
+		motor[FrontLeft] = (MotorLeftPower * PowerPercentLeft);
+		motor[BackLeft] = (MotorLeftPower * PowerPercentLeft);
+		do
+		{
+			RightSpeed = (getMotorEncoder(FrontRight) - LastRightMotorValue);
+			LeftSpeed = (getMotorEncoder(FrontLeft) - LastLeftMotorValue);
+			wait10Msec(25);
+		}
+		while(1==1);
+		if((RightSpeed/PowerPercentRight) > (LeftSpeed/PowerPercentRight))
+		{
+			if (MotorLeftPower < 127)
+			{
+				MotorLeftPower = (MotorLeftPower + 1);
+			}
+			else
+			{
+				MotorRightPower = (MotorRightPower - 1);
+			}
+		}
+		else if((RightSpeed/PowerPercentRight) < (LeftSpeed/PowerPercentRight))
+		{
+			if (MotorRightPower < 127)
+			{
+				MotorRightPower = MotorRightPower + 1;
+			}
+			else
+			{
+				MotorLeftPower = MotorLeftPower - 1;
+			}
+		}
+	}
+}
+task main()
+{
+	while(1==1)
+	{
+		motor[launch1] = LaunchSpeed; //We are Family
+		motor[launch2] = LaunchSpeed;
+		motor[launch3] = LaunchSpeed;
+		motor[launch4] = LaunchSpeed;
+		startTask(Drive);
+    Angle = 4095 - SensorValue[ArmAngle]; //500ish is down, 800ish is up
+ 		if(Angle <= 520)
+   	 {
+  		AngleThrower = 2;
+   	 }
+ 		 if(Angle >= 780)
+ 		 {
+  		AngleThrower = 2;
+   	 }
+		if(vexRT[Btn5U] == 1) //Fore!
+			{
+				AngleThrower = 0;
+			}
+		if(vexRT[Btn5D] ==1)
+			{
+				AngleThrower = 1;
+			}
+   	if(AngleThrower == 0)
+ 	  		{
+   	  		LaunchSpeed = 127;
+   	  	}
+ 		else if(AngleThrower == 1) //Take it back now y'all
+   	  	{
+   	  		LaunchSpeed = -127;
+   	 		}
+		else // Stop, Wait a minute, fill my cup, put some liquor in it
+			{
+				LaunchSpeed = -15;
+			}
+		if(vexRT[Btn6U] == 1) //Hungry Hungry Hippos
+			{
+				motor[feed1] = 100;
+			}
+		else if(vexRT[Btn6D] == 1) // Regurgitate
+			{
+				motor[feed1] = -100;
+			}
+		else //That feeling on Black Friday Morning
+			{
+				motor[feed1] = 0;
+			}
+		if(vexRT[Btn8R] == 1)
+			{
+				startTask(Aiming);
+			}
+	}
+}
